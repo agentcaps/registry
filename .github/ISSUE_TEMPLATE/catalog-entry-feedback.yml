@@ -1,0 +1,34 @@
+name: CatalogEntry mapping feedback
+description: Report inaccurate or incomplete CatalogEntry fields.
+title: "CatalogEntry feedback: "
+labels: ["catalog-entry", "validation"]
+body:
+  - type: input
+    id: entry
+    attributes:
+      label: CatalogEntry or source
+      description: Link to the source repo, listing, or paste the CatalogEntry identifier.
+      placeholder: urn:air:github.com:owner:repo:skill:name
+    validations:
+      required: true
+  - type: textarea
+    id: current_behavior
+    attributes:
+      label: Current mapping
+      description: What fields look wrong, missing, too broad, or too narrow?
+    validations:
+      required: true
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Suggested mapping
+      description: Suggest better displayName, description, tags, capabilities, or representativeQueries.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add links, examples, or queries that should find this capability.
+    validations:
+      required: false

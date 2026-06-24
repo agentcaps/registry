@@ -1,0 +1,45 @@
+name: Submit a SKILL.md URL
+description: Share a SKILL.md repository or direct URL for AgentCaps Registry to import.
+title: "Submit SKILL.md: "
+labels: ["skill-md", "catalog-entry"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing a capability source. The goal is to collect real SKILL.md examples and improve CatalogEntry mapping quality.
+  - type: input
+    id: skill_url
+    attributes:
+      label: SKILL.md repository or URL
+      description: GitHub repository URL, direct SKILL.md URL, or another public git repository.
+      placeholder: https://github.com/owner/repo
+    validations:
+      required: true
+  - type: textarea
+    id: what_it_does
+    attributes:
+      label: What does this skill do?
+      description: Describe the user-facing capability in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: users
+    attributes:
+      label: Who would use it?
+      description: Describe the agents, developers, or teams that would benefit from this capability.
+    validations:
+      required: false
+  - type: textarea
+    id: suggested_fields
+    attributes:
+      label: Suggested CatalogEntry fields
+      description: Optional suggested tags, capabilities, and representative queries.
+      value: |
+        tags:
+          - 
+        capabilities:
+          - 
+        representativeQueries:
+          - 
+    validations:
+      required: false
