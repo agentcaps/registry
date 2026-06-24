@@ -221,6 +221,8 @@ Search the built index:
 agentcaps-registry --root .agentcaps search "convert pptx to web slides"
 ```
 
+See a checked-in real example at [`examples/frontend-slides`](./examples/frontend-slides). It includes `sources.yaml`, the generated `CatalogEntry`, validation report, and `ai-catalog.json`.
+
 Generated output:
 
 ```text

@@ -1,0 +1,28 @@
+{
+  "identifier": "urn:air:github.com:zarazhangrui:frontend-slides:skill:frontend-slides",
+  "displayName": "frontend-slides",
+  "type": "application/ai-skill",
+  "url": "https://raw.githubusercontent.com/zarazhangrui/frontend-slides/9906a34d640d2111f724544cbc50f7f130569ae1/SKILL.md",
+  "description": "Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices.",
+  "tags": [
+    "slides",
+    "presentation",
+    "html",
+    "frontend",
+    "design",
+    "pptx"
+  ],
+  "capabilities": [
+    "slides.create",
+    "slides.convert",
+    "presentation.design",
+    "html.generate",
+    "pptx.convert"
+  ],
+  "representativeQueries": [
+    "create an animated HTML presentation for a product pitch",
+    "convert a PowerPoint deck into a web-based slide deck",
+    "turn markdown or notes into a polished slide deck"
+  ],
+  "updatedAt": "2026-06-24T08:16:25.443Z"
+}

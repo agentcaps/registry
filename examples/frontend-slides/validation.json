@@ -1,0 +1,13 @@
+{
+  "score": 95,
+  "errors": [],
+  "warnings": [],
+  "info": [
+    {
+      "code": "trust-manifest",
+      "message": "TrustManifest not supplied; this is informational and not a safety score.",
+      "severity": "info"
+    }
+  ],
+  "summary": "Validation score measures ARD metadata completeness, not safety, trust, or publisher verification. Score: 95/100."
+}

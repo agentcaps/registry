@@ -1,0 +1,16 @@
+sources:
+  - slug: frontend-slides
+    type: git_repository
+    url: https://github.com/zarazhangrui/frontend-slides
+    path: SKILL.md
+    curation:
+      category: presentation
+      reason: Presentation generation skill for turning ideas or PPT files into HTML slides.
+      seoKeywords: [frontend slides, html presentation skill, pptx to web slides]
+      catalogEntry:
+        tags: [slides, presentation, html, frontend, design, pptx]
+        capabilities: [slides.create, slides.convert, presentation.design, html.generate, pptx.convert]
+        representativeQueries:
+          - create an animated HTML presentation for a product pitch
+          - convert a PowerPoint deck into a web-based slide deck
+          - turn markdown or notes into a polished slide deck

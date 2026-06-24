@@ -119,6 +119,8 @@ agentcaps-registry --root .agentcaps build
 agentcaps-registry --root .agentcaps search "convert pptx to web slides"
 ```
 
+真实样例见 [`examples/frontend-slides`](./examples/frontend-slides)，其中包含 `sources.yaml`、生成的 `CatalogEntry`、validation report 和 `ai-catalog.json`。
+
 生成结果：
 
 ```text
