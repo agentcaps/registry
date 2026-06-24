@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build and test output
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Local registry workspaces and generated catalogs
+.agentcaps/
+.agentcaps-*/
+data/registry/
+*/data/registry/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+*.token
+
+# Local editor / OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.cache/
+
+# Internal planning, decisions, and session handoffs
+PRD*.md
+*-PRD*.md
+*.prd.md
+handoff*.md
+HANDOFF*.md
+session*.md
+SESSION*.md
+notes.internal.md
+*.internal.md
+*-internal.md
+docs/internal/
+docs/private/
+docs/decisions/
+docs/*decision*.md
+docs/*decisions*.md
+docs/*context*.md
+docs/*handoff*.md

@@ -1,0 +1,38 @@
+{
+  "name": "@agentcaps/registry",
+  "version": "0.1.0",
+  "description": "Enterprise-grade ARD registry for approved agent capabilities.",
+  "type": "module",
+  "bin": {
+    "agentcaps-registry": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.35",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentcaps/registry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agentcaps/registry/issues"
+  },
+  "homepage": "https://github.com/agentcaps/registry#readme",
+  "packageManager": "pnpm@10.30.2"
+}
