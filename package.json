@@ -1,6 +1,6 @@
 {
   "name": "@agentcaps/registry",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Enterprise-grade ARD registry for approved agent capabilities.",
   "type": "module",
   "bin": {
@@ -31,7 +31,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agentcaps/registry.git"
+    "url": "git+https://github.com/agentcaps/registry.git"
   },
   "bugs": {
     "url": "https://github.com/agentcaps/registry/issues"
@@ -50,9 +50,22 @@
   "files": [
     "dist",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "keywords": [
+    "agent",
+    "ai-agent",
+    "agent-capabilities",
+    "ard",
+    "ai-catalog",
+    "skill-md",
+    "registry",
+    "mcp",
+    "a2a",
+    "governance"
+  ]
 }

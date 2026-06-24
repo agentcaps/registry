@@ -1,5 +1,12 @@
 # AgentCaps Registry
 
+[![CI](https://github.com/agentcaps/registry/actions/workflows/ci.yml/badge.svg)](https://github.com/agentcaps/registry/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@agentcaps/registry.svg)](https://www.npmjs.com/package/@agentcaps/registry)
+[![license](https://img.shields.io/npm/l/@agentcaps/registry.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/@agentcaps/registry.svg)](https://www.npmjs.com/package/@agentcaps/registry)
+
+[简体中文](./README.zh-CN.md)
+
 Enterprise-grade ARD registry for approved agent capabilities.
 
 AgentCaps Registry turns scattered capability sources, starting with `SKILL.md`, into a governed ARD / AI Catalog that agents can discover, search, and consume. It is designed for teams that want agents to use approved, pinned, reviewable capabilities instead of importing arbitrary skills directly from the internet.
