@@ -314,6 +314,17 @@ Later:
 - MCP, A2A, and OpenAPI capability source types;
 - signed catalog artifacts and stronger provenance metadata.
 
+## Package
+
+This package is prepared for npm publication as `@agentcaps/registry`.
+
+```bash
+pnpm pack --dry-run
+```
+
+The published package includes the compiled `dist/` files, `README.md`, and `LICENSE`.
+
+
 ## Development
 
 ```bash

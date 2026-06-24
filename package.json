@@ -10,7 +10,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cli": "tsx src/cli.ts"
+    "cli": "tsx src/cli.ts",
+    "clean": "rm -rf dist",
+    "prepack": "pnpm build",
+    "pack:check": "pnpm pack --dry-run"
   },
   "dependencies": {
     "commander": "^12.1.0",
@@ -34,5 +37,22 @@
     "url": "https://github.com/agentcaps/registry/issues"
   },
   "homepage": "https://github.com/agentcaps/registry#readme",
-  "packageManager": "pnpm@10.30.2"
+  "packageManager": "pnpm@10.30.2",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

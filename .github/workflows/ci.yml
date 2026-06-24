@@ -34,3 +34,6 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Check package
+        run: pnpm pack --dry-run

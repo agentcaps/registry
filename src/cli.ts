@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import {
   buildRegistry,
@@ -17,6 +19,16 @@ import { listEntrySlugs, loadSources } from './storage.js';
 
 function rootOption(value?: string): string {
   return value ?? DEFAULT_REGISTRY_DIR;
+}
+
+function isDirectCliInvocation(): boolean {
+  const invokedPath = process.argv[1];
+  if (!invokedPath) return false;
+  try {
+    return realpathSync(invokedPath) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
@@ -126,7 +138,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   await program.parseAsync(argv);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectCliInvocation()) {
   runCli().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
