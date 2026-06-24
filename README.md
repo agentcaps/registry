@@ -69,8 +69,9 @@ A source is where the original capability document lives.
 V0 supports:
 
 ```text
-git_repository  public git repository containing SKILL.md
-direct_url      direct URL or local path to a SKILL.md-compatible document
+git_repository             public git repository containing one SKILL.md
+git_repository_collection  public git repository containing multiple SKILL.md files
+direct_url                 direct URL or local path to a SKILL.md-compatible document
 ```
 
 ### CatalogEntry
@@ -111,6 +112,19 @@ sources:
           - convert a PowerPoint deck into a web-based slide deck
           - make visually polished frontend slides from a topic
 ```
+
+For repository collections, use `include` to expand one source repo into multiple entries:
+
+```yaml
+sources:
+  - slug: anthropics-skills
+    type: git_repository_collection
+    url: https://github.com/anthropics/skills
+    include:
+      - skills/*/SKILL.md
+```
+
+Each matched `SKILL.md` becomes its own entry. For example, `skills/pdf/SKILL.md` becomes a separate CatalogEntry from `skills/docx/SKILL.md`.
 
 `curation.catalogEntry` only fills standard CatalogEntry fields. It is not emitted as AgentCaps-specific metadata.
 

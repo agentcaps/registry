@@ -1,4 +1,4 @@
-export type SourceType = 'git_repository' | 'direct_url';
+export type SourceType = 'git_repository' | 'git_repository_collection' | 'direct_url';
 export type PublicationStatus = 'imported' | 'published' | 'revoked';
 export type DriftStatus = 'unknown' | 'clean' | 'drifted' | 'unsupported';
 
@@ -26,6 +26,7 @@ export interface SourceDefinition {
   type: SourceType;
   url: string;
   path?: string;
+  include?: string[];
   trackingRef?: string;
   curation?: {
     category?: string;

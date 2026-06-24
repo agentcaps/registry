@@ -204,8 +204,22 @@ https://www.npmjs.com/package/@agentcaps/registry
 
 V0 只聚焦 `SKILL.md`-compatible capability sources：
 
-- public git repository containing `SKILL.md`；
+- public git repository containing one `SKILL.md`；
+- public git repository collection containing multiple `SKILL.md` files；
 - direct `SKILL.md` URL。
+
+对于类似 `anthropics/skills` 这样的合集仓库，可以用 `git_repository_collection` + `include` 将一个仓库展开成多个 CatalogEntry：
+
+```yaml
+sources:
+  - slug: anthropics-skills
+    type: git_repository_collection
+    url: https://github.com/anthropics/skills
+    include:
+      - skills/*/SKILL.md
+```
+
+每个匹配到的 `SKILL.md` 都会成为独立 entry。
 
 MCP、A2A、OpenAPI 会在后续版本中作为新的 source types 进入，但不是 V0 的范围。
 

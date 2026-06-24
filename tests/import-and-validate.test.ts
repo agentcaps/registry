@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { importSource } from '../src/workflow.js';
+import { importSource, importSourceEntries } from '../src/workflow.js';
 import { readEntryCatalog, readEntryValidation } from '../src/storage.js';
 import { createGitRepoFromFixture, tempDir, writeRegistryConfig, writeSources } from './helpers.js';
 
@@ -69,5 +69,32 @@ describe('import and validation pipeline', () => {
     expect(JSON.stringify(catalogEntry)).not.toContain('curation');
     expect(JSON.stringify(catalogEntry)).not.toContain('metadata');
     expect(validation.score).toBeGreaterThanOrEqual(90);
+  });
+
+  it('imports a git repository collection into one entry per matched SKILL.md', async () => {
+    const root = join(tempDir(), '.agentcaps');
+    const repo = createGitRepoFromFixture(join(fixtures, 'git-repos', 'collection-skill'));
+    writeRegistryConfig(root);
+    writeSources(root, [{
+      slug: 'anthropics-skills',
+      type: 'git_repository_collection',
+      url: repo,
+      include: ['skills/*/SKILL.md'],
+      trackingRef: 'main'
+    }]);
+
+    const entries = await importSourceEntries('anthropics-skills', root);
+    expect(entries.map((entry) => entry.slug).sort()).toEqual(['anthropics-skills-docx', 'anthropics-skills-pdf']);
+    expect(entries.every((entry) => entry.source.type === 'git_repository')).toBe(true);
+    expect(entries.map((entry) => entry.source.path).sort()).toEqual(['skills/docx/SKILL.md', 'skills/pdf/SKILL.md']);
+
+    const pdf = await readEntryCatalog(root, 'anthropics-skills-pdf');
+    const docx = await readEntryCatalog(root, 'anthropics-skills-docx');
+    expect(pdf.displayName).toBe('PDF Skill');
+    expect(docx.displayName).toBe('DOCX Skill');
+    expect(pdf.url).toContain('/skills/pdf/SKILL.md');
+    expect(JSON.stringify([pdf, docx])).not.toContain('metadata.agentcaps');
+
+    await expect(importSource('anthropics-skills', root)).rejects.toThrow('Use importSourceEntries');
   });
 });

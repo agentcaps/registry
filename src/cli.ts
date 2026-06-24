@@ -7,7 +7,7 @@ import {
   checkAllDrift,
   checkDrift,
   importAll,
-  importSource,
+  importSourceEntries,
   initRegistry,
   publishEntry,
   revokeEntry,
@@ -15,7 +15,7 @@ import {
   validateEntry
 } from './workflow.js';
 import { DEFAULT_REGISTRY_DIR } from './constants.js';
-import { listEntrySlugs, loadSources } from './storage.js';
+import { listEntrySlugs } from './storage.js';
 
 function rootOption(value?: string): string {
   return value ?? DEFAULT_REGISTRY_DIR;
@@ -54,8 +54,8 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
         return;
       }
       if (!slug) throw new Error('Provide a slug or --all.');
-      await importSource(slug, root);
-      console.log(`Imported ${slug}.`);
+      const results = await importSourceEntries(slug, root);
+      console.log(results.length === 1 ? `Imported ${results[0].slug}.` : `Imported ${results.length} entries from ${slug}.`);
     });
 
   program.command('validate')
@@ -64,10 +64,10 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     .action(async (slug: string | undefined, options: { all?: boolean }) => {
       const root = rootOption(program.opts().root);
       if (options.all) {
-        const sources = await loadSources(root);
-        for (const source of sources.sources) {
-          const report = await validateEntry(source.slug, root);
-          console.log(`${source.slug}: ${report.score}/100`);
+        const slugs = await listEntrySlugs(root);
+        for (const entrySlug of slugs) {
+          const report = await validateEntry(entrySlug, root);
+          console.log(`${entrySlug}: ${report.score}/100`);
         }
         return;
       }

@@ -1,7 +1,7 @@
 import { join } from 'node:path';
-import type { AICatalogManifest, DriftReport, PublicationRecord, RegistryEntryFile, DriftStatus } from './types.js';
+import type { AICatalogManifest, DriftReport, PublicationRecord, RegistryConfig, RegistryEntryFile, DriftStatus, SourceDefinition, SourceSnapshot } from './types.js';
 import { buildCatalogEntry } from './catalog.js';
-import { fetchSource, latestGitCommit } from './source.js';
+import { fetchSourceEntries, latestGitCommit } from './source.js';
 import { parseSkillMarkdown } from './skill.js';
 import { validateCatalogEntry } from './validation.js';
 import {
@@ -33,14 +33,17 @@ export async function initRegistry(root: string): Promise<void> {
   await writeYamlFile(join(root, 'sources.yaml'), { sources: [] });
 }
 
-export async function importSource(slug: string, root: string): Promise<RegistryEntryFile> {
-  await ensureRegistryDirs(root);
-  const source = await findSource(slug, root);
-  if (!source) throw new Error(`Source not found: ${slug}`);
-  const config = await loadRegistryConfig(root);
-  const fetched = await fetchSource(source);
-  const skill = parseSkillMarkdown(fetched.content);
-  const catalogEntry = buildCatalogEntry({ source, snapshot: fetched.snapshot, skill, config });
+async function writeImportedEntry(input: {
+  root: string;
+  config: RegistryConfig;
+  slug: string;
+  source: SourceDefinition;
+  snapshot: SourceSnapshot;
+  content: string;
+}): Promise<RegistryEntryFile> {
+  const { root, config, slug, source, snapshot, content } = input;
+  const skill = parseSkillMarkdown(content);
+  const catalogEntry = buildCatalogEntry({ source, snapshot, skill, config });
   const validation = validateCatalogEntry(catalogEntry);
   let existing: RegistryEntryFile | undefined;
   try {
@@ -54,17 +57,45 @@ export async function importSource(slug: string, root: string): Promise<Registry
     publicationStatus: existing?.publicationStatus ?? 'imported',
     driftStatus: existing?.driftStatus ?? 'unknown',
     source,
-    snapshot: fetched.snapshot,
+    snapshot,
     publication: existing?.publication
   };
   await writeEntryBundle(root, entry, catalogEntry, validation);
   return entry;
 }
 
+export async function importSourceEntries(slug: string, root: string): Promise<RegistryEntryFile[]> {
+  await ensureRegistryDirs(root);
+  const source = await findSource(slug, root);
+  if (!source) throw new Error(`Source not found: ${slug}`);
+  const config = await loadRegistryConfig(root);
+  const fetchedEntries = await fetchSourceEntries(source);
+  const results: RegistryEntryFile[] = [];
+  for (const fetched of fetchedEntries) {
+    results.push(await writeImportedEntry({
+      root,
+      config,
+      slug: fetched.slug,
+      source: fetched.source,
+      snapshot: fetched.snapshot,
+      content: fetched.content
+    }));
+  }
+  return results;
+}
+
+export async function importSource(slug: string, root: string): Promise<RegistryEntryFile> {
+  const results = await importSourceEntries(slug, root);
+  if (results.length !== 1) {
+    throw new Error(`Source ${slug} imported ${results.length} entries. Use importSourceEntries() for collection sources.`);
+  }
+  return results[0];
+}
+
 export async function importAll(root: string): Promise<RegistryEntryFile[]> {
   const sources = await loadSources(root);
   const results: RegistryEntryFile[] = [];
-  for (const source of sources.sources) results.push(await importSource(source.slug, root));
+  for (const source of sources.sources) results.push(...(await importSourceEntries(source.slug, root)));
   return results;
 }
 
