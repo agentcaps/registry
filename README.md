@@ -136,21 +136,30 @@ published snapshot commit != latest tracked ref
 Requirements:
 
 - Node.js `>=22`
-- pnpm
+- npm
 - git
 
+Install the CLI from npm:
+
 ```bash
-git clone https://github.com/agentcaps/registry.git
-cd registry
-pnpm install
-pnpm build
+npm install -g @agentcaps/registry
+```
+
+Or run it without a global install:
+
+```bash
+npx -y @agentcaps/registry@latest --help
 ```
 
 Create a registry workspace:
 
 ```bash
-node dist/cli.js --root .agentcaps init
+mkdir my-agentcaps-registry
+cd my-agentcaps-registry
+agentcaps-registry --root .agentcaps init
 ```
+
+If you prefer `npx`, replace `agentcaps-registry` with `npx -y @agentcaps/registry@latest` in the commands below.
 
 Edit `.agentcaps/sources.yaml`:
 
@@ -179,16 +188,16 @@ sources:
 Run the workflow:
 
 ```bash
-node dist/cli.js --root .agentcaps import frontend-slides
-node dist/cli.js --root .agentcaps validate frontend-slides
-node dist/cli.js --root .agentcaps publish frontend-slides --by alice@example.com
-node dist/cli.js --root .agentcaps build
+agentcaps-registry --root .agentcaps import frontend-slides
+agentcaps-registry --root .agentcaps validate frontend-slides
+agentcaps-registry --root .agentcaps publish frontend-slides --by alice@example.com
+agentcaps-registry --root .agentcaps build
 ```
 
 Search the built index:
 
 ```bash
-node dist/cli.js --root .agentcaps search "convert pptx to web slides"
+agentcaps-registry --root .agentcaps search "convert pptx to web slides"
 ```
 
 Generated output:
@@ -223,11 +232,7 @@ agentcaps-registry build
 agentcaps-registry search "<query>"
 ```
 
-During local development you can run the compiled CLI directly:
-
-```bash
-node dist/cli.js --root .agentcaps <command>
-```
+The CLI is published as the `agentcaps-registry` binary by the `@agentcaps/registry` npm package.
 
 ## Generated `ai-catalog.json`
 
@@ -316,21 +321,26 @@ Later:
 
 ## Package
 
-This package is prepared for npm publication as `@agentcaps/registry`.
+This package is published on npm as `@agentcaps/registry`.
 
 ```bash
-pnpm pack --dry-run
+npm install -g @agentcaps/registry
+npx -y @agentcaps/registry@latest --help
 ```
 
 The published package includes the compiled `dist/` files, `README.md`, and `LICENSE`.
 
-
 ## Development
 
+Build from source only if you are contributing to the registry engine:
+
 ```bash
+git clone https://github.com/agentcaps/registry.git
+cd registry
 pnpm install
 pnpm build
 pnpm test
+pnpm pack --dry-run
 ```
 
 Tests use local fixtures and local git repositories. They do not depend on live GitHub state.
