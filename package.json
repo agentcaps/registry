@@ -1,6 +1,6 @@
 {
   "name": "@agentcaps/registry",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Enterprise-grade ARD registry for approved agent capabilities.",
   "type": "module",
   "bin": {

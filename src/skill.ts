@@ -33,7 +33,15 @@ export function parseSkillMarkdown(markdown: string): SkillDocument {
   let body = markdown;
   const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
   if (match) {
-    frontmatter = (YAML.parse(match[1]) ?? {}) as Record<string, unknown>;
+    // Community SKILL.md files often carry non-strict frontmatter (tabs, unquoted
+    // values, duplicate keys). Tolerate parse failures rather than aborting the
+    // whole import: fall back to empty frontmatter and recover name/description
+    // from the body.
+    try {
+      frontmatter = (YAML.parse(match[1]) ?? {}) as Record<string, unknown>;
+    } catch {
+      frontmatter = {};
+    }
     body = markdown.slice(match[0].length);
   }
 
