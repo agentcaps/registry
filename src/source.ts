@@ -1,9 +1,13 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readTextFile, removeDir, runGit, sha256, parseGitHubRepoUrl, fileUrl, slugify } from './utils.js';
 import type { SourceDefinition, SourceSnapshot } from './types.js';
+
+// Directories never worth traversing when expanding a collection source.
+const DEFAULT_IGNORED_DIRS = new Set(['node_modules', '.git', '.hg', '.svn', '.cache']);
 
 export interface FetchedArtifact {
   snapshot: SourceSnapshot;
@@ -90,6 +94,7 @@ async function listRelativeFiles(root: string, base = ''): Promise<string[]> {
   for (const entry of entries) {
     const relativePath = base ? posix.join(base, entry.name) : entry.name;
     if (entry.isDirectory()) {
+      if (DEFAULT_IGNORED_DIRS.has(entry.name)) continue;
       files.push(...(await listRelativeFiles(root, relativePath)));
     } else if (entry.isFile()) {
       files.push(relativePath);
@@ -98,27 +103,50 @@ async function listRelativeFiles(root: string, base = ''): Promise<string[]> {
   return files;
 }
 
-function globToRegExp(pattern: string): RegExp {
+/**
+ * Translate a glob to a RegExp. Supports `*` (single segment), `**` and `**\/`
+ * (zero or more segments), `?`, and brace alternation like `{md,markdown}`.
+ */
+export function globToRegExp(pattern: string): RegExp {
   const normalized = pattern.replace(/\\/g, '/').replace(/^\/+/, '');
   let output = '^';
+  let braceDepth = 0;
   for (let index = 0; index < normalized.length; index += 1) {
     const char = normalized[index];
     if (char === '*') {
       if (normalized[index + 1] === '*') {
-        output += '.*';
         index += 1;
+        if (normalized[index + 1] === '/') {
+          // `**/` matches zero or more leading path segments.
+          output += '(?:[^/]+/)*';
+          index += 1;
+        } else {
+          output += '.*';
+        }
       } else {
         output += '[^/]*';
       }
     } else if (char === '?') {
       output += '[^/]';
-    } else if ('+.^${}()|[]\\'.includes(char)) {
+    } else if (char === '{') {
+      braceDepth += 1;
+      output += '(?:';
+    } else if (char === '}' && braceDepth > 0) {
+      braceDepth -= 1;
+      output += ')';
+    } else if (char === ',' && braceDepth > 0) {
+      output += '|';
+    } else if ('+.^$()|[]\\'.includes(char)) {
       output += `\\${char}`;
     } else {
       output += char;
     }
   }
   return new RegExp(`${output}$`);
+}
+
+function matchesAny(file: string, patterns: RegExp[]): boolean {
+  return patterns.some((pattern) => pattern.test(file));
 }
 
 function collectionBaseSlug(sourceSlug: string, artifactPath: string): string {
@@ -150,9 +178,12 @@ export async function fetchGitCollectionSource(source: SourceDefinition): Promis
   const tempDir = await mkdtemp(join(tmpdir(), 'agentcaps-git-collection-'));
   try {
     const { sourceCommit, trackingRef } = await cloneGitSource(source, tempDir);
-    const patterns = source.include.map(globToRegExp);
+    const includePatterns = source.include.map(globToRegExp);
+    const excludePatterns = (source.exclude ?? []).map(globToRegExp);
     const files = await listRelativeFiles(tempDir);
-    const matches = [...new Set(files.filter((file) => patterns.some((pattern) => pattern.test(file))))].sort();
+    const matches = [
+      ...new Set(files.filter((file) => matchesAny(file, includePatterns) && !matchesAny(file, excludePatterns)))
+    ].sort();
     if (!matches.length) {
       throw new Error(`Collection source ${source.slug} did not match any files.`);
     }
@@ -183,6 +214,8 @@ export async function fetchGitCollectionSource(source: SourceDefinition): Promis
 export async function fetchDirectUrlSource(source: SourceDefinition): Promise<FetchedArtifact> {
   const artifactPath = source.path ?? 'SKILL.md';
   let content: string;
+  let etag: string | undefined;
+  let lastModified: string | undefined;
   if (source.url.startsWith('file://')) {
     content = await readTextFile(fileURLToPath(source.url));
   } else if (!source.url.match(/^https?:\/\//)) {
@@ -191,19 +224,63 @@ export async function fetchDirectUrlSource(source: SourceDefinition): Promise<Fe
     const response = await fetch(source.url);
     if (!response.ok) throw new Error(`Failed to fetch ${source.url}: ${response.status}`);
     content = await response.text();
+    etag = response.headers.get('etag') ?? undefined;
+    lastModified = response.headers.get('last-modified') ?? undefined;
   }
   const fetchedAt = new Date().toISOString();
+  const snapshot: SourceSnapshot = {
+    sourceType: 'direct_url',
+    sourceUrl: source.url,
+    artifactPath,
+    pinnedArtifactUrl: source.url,
+    rawArtifactUrl: source.url,
+    sourceDigest: sha256(content),
+    fetchedAt
+  };
+  if (etag) snapshot.etag = etag;
+  if (lastModified) snapshot.lastModified = lastModified;
+  return { content, snapshot };
+}
+
+export interface DirectUrlState {
+  available: boolean;
+  notModified?: boolean;
+  digest?: string;
+  etag?: string;
+  lastModified?: string;
+}
+
+/**
+ * Inspect the current state of a direct_url source for drift detection. For HTTP
+ * sources it issues a conditional GET (If-None-Match / If-Modified-Since) and
+ * reports `notModified` on a 304; otherwise it compares content digests. For
+ * file / local-path sources it reads and digests the file.
+ */
+export async function latestDirectUrlState(
+  source: SourceDefinition,
+  previous: { etag?: string; lastModified?: string } = {}
+): Promise<DirectUrlState> {
+  if (source.url.startsWith('file://') || !/^https?:\/\//.test(source.url)) {
+    const path = source.url.startsWith('file://') ? fileURLToPath(source.url) : source.url;
+    if (!existsSync(path)) return { available: false };
+    const content = await readTextFile(path);
+    return { available: true, digest: sha256(content) };
+  }
+
+  const headers: Record<string, string> = {};
+  if (previous.etag) headers['If-None-Match'] = previous.etag;
+  if (previous.lastModified) headers['If-Modified-Since'] = previous.lastModified;
+  const response = await fetch(source.url, { headers });
+  if (response.status === 304) {
+    return { available: true, notModified: true, etag: previous.etag, lastModified: previous.lastModified };
+  }
+  if (!response.ok) return { available: false };
+  const content = await response.text();
   return {
-    content,
-    snapshot: {
-      sourceType: 'direct_url',
-      sourceUrl: source.url,
-      artifactPath,
-      pinnedArtifactUrl: source.url,
-      rawArtifactUrl: source.url,
-      sourceDigest: sha256(content),
-      fetchedAt
-    }
+    available: true,
+    digest: sha256(content),
+    etag: response.headers.get('etag') ?? undefined,
+    lastModified: response.headers.get('last-modified') ?? undefined
   };
 }
 

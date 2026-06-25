@@ -16,6 +16,7 @@ import {
 } from './workflow.js';
 import { DEFAULT_REGISTRY_DIR } from './constants.js';
 import { listEntrySlugs } from './storage.js';
+import { startRegistryServer } from './server.js';
 
 function rootOption(value?: string): string {
   return value ?? DEFAULT_REGISTRY_DIR;
@@ -61,19 +62,33 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   program.command('validate')
     .argument('[slug]')
     .option('--all', 'validate all entries')
-    .action(async (slug: string | undefined, options: { all?: boolean }) => {
+    .option('--check-urls', 'also check CatalogEntry.url reachability over the network')
+    .option('--timeout <ms>', 'URL reachability timeout in milliseconds', '5000')
+    .option('--json', 'output machine-readable JSON')
+    .option('--min-score <score>', 'fail (non-zero exit) if any entry scores below this threshold')
+    .action(async (slug: string | undefined, options: { all?: boolean; checkUrls?: boolean; timeout?: string; json?: boolean; minScore?: string }) => {
       const root = rootOption(program.opts().root);
-      if (options.all) {
-        const slugs = await listEntrySlugs(root);
-        for (const entrySlug of slugs) {
-          const report = await validateEntry(entrySlug, root);
-          console.log(`${entrySlug}: ${report.score}/100`);
-        }
-        return;
+      const validateOptions = { checkUrls: options.checkUrls, timeoutMs: Number(options.timeout) };
+      if (!options.all && !slug) throw new Error('Provide a slug or --all.');
+      const slugs = options.all ? await listEntrySlugs(root) : [slug as string];
+      const results = [];
+      for (const entrySlug of slugs) {
+        results.push({ slug: entrySlug, ...(await validateEntry(entrySlug, root, validateOptions)) });
       }
-      if (!slug) throw new Error('Provide a slug or --all.');
-      const report = await validateEntry(slug, root);
-      console.log(`${slug}: ${report.score}/100`);
+      const minScore = options.minScore !== undefined ? Number(options.minScore) : undefined;
+      const failures = results.filter((r) => r.errors.length > 0 || (minScore !== undefined && r.score < minScore));
+      if (options.json) {
+        console.log(JSON.stringify({ ok: failures.length === 0, results }, null, 2));
+      } else {
+        for (const r of results) {
+          const errorNote = r.errors.length ? ` (${r.errors.length} error${r.errors.length === 1 ? '' : 's'})` : '';
+          console.log(`${r.slug}: ${r.score}/100${errorNote}`);
+        }
+      }
+      if (failures.length) {
+        if (!options.json) console.error(`Validation gate failed for ${failures.length} entr${failures.length === 1 ? 'y' : 'ies'}.`);
+        process.exitCode = 1;
+      }
     });
 
   program.command('publish')
@@ -110,22 +125,34 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   program.command('drift')
     .argument('[slug]')
     .option('--all', 'check all entries')
-    .action(async (slug: string | undefined, options: { all?: boolean }) => {
+    .option('--json', 'output machine-readable JSON')
+    .option('--ci', 'exit with a non-zero code if any entry has drifted')
+    .action(async (slug: string | undefined, options: { all?: boolean; json?: boolean; ci?: boolean }) => {
       const root = rootOption(program.opts().root);
-      if (options.all) {
-        const reports = await checkAllDrift(root);
+      if (!options.all && !slug) throw new Error('Provide a slug or --all.');
+      const reports = options.all ? await checkAllDrift(root) : [await checkDrift(slug as string, root)];
+      if (options.json) {
+        console.log(JSON.stringify({ reports }, null, 2));
+      } else {
         for (const report of reports) console.log(`${report.slug}: ${report.status}`);
-        return;
       }
-      if (!slug) throw new Error('Provide a slug or --all.');
-      const report = await checkDrift(slug, root);
-      console.log(`${report.slug}: ${report.status}`);
+      if (options.ci && reports.some((report) => report.status === 'drifted')) {
+        if (!options.json) console.error('Drift detected in one or more published entries.');
+        process.exitCode = 1;
+      }
     });
 
-  program.command('build').action(async () => {
-    const manifest = await buildRegistry(rootOption(program.opts().root));
-    console.log(`Built registry with ${manifest.entries.length} published entr${manifest.entries.length === 1 ? 'y' : 'ies'}.`);
-  });
+  program.command('build')
+    .option('--exclude-drifted', 'exclude entries marked as drifted from the built catalog')
+    .option('--json', 'output machine-readable JSON')
+    .action(async (options: { excludeDrifted?: boolean; json?: boolean }) => {
+      const manifest = await buildRegistry(rootOption(program.opts().root), { excludeDrifted: options.excludeDrifted });
+      if (options.json) {
+        console.log(JSON.stringify({ entries: manifest.entries.length, host: manifest.host }, null, 2));
+      } else {
+        console.log(`Built registry with ${manifest.entries.length} published entr${manifest.entries.length === 1 ? 'y' : 'ies'}.`);
+      }
+    });
 
   program.command('search')
     .argument('<query>')
@@ -133,6 +160,20 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     .action(async (query: string, options: { limit: string }) => {
       const results = await searchBuiltIndex(rootOption(program.opts().root), query, Number(options.limit));
       console.log(JSON.stringify({ results }, null, 2));
+    });
+
+  program.command('serve')
+    .description('Serve built registry artifacts over an ARD-compatible HTTP endpoint')
+    .argument('[dir]', 'registry root or dist directory to serve (defaults to --root)')
+    .option('-p, --port <number>', 'port to listen on', '8787')
+    .option('-H, --host <host>', 'host to bind', '127.0.0.1')
+    .action(async (dir: string | undefined, options: { port: string; host: string }) => {
+      const target = dir ?? rootOption(program.opts().root);
+      const { url } = await startRegistryServer(target, { host: options.host, port: Number(options.port) });
+      console.log(`AgentCaps registry serving ${target} at ${url}`);
+      console.log(`  GET  ${url}/.well-known/ai-catalog.json`);
+      console.log(`  POST ${url}/search   body: {"query":"...","limit":10}`);
+      console.log('Press Ctrl+C to stop.');
     });
 
   await program.parseAsync(argv);

@@ -121,8 +121,15 @@ sources:
     type: git_repository_collection
     url: https://github.com/anthropics/skills
     include:
-      - skills/*/SKILL.md
+      - "**/SKILL.{md,markdown}"
+    exclude:
+      - "**/templates/**"
 ```
+
+Globs support `*` (one path segment), `**` / `**/` (zero or more segments), `?`,
+and brace alternation like `{md,markdown}`. Optional `exclude` globs filter out
+matches, and `node_modules`, `.git`, `.hg`, `.svn`, and `.cache` directories are
+ignored automatically.
 
 Each matched `SKILL.md` becomes its own entry. For example, `skills/pdf/SKILL.md` becomes a separate CatalogEntry from `skills/docx/SKILL.md`.
 
@@ -144,13 +151,20 @@ This keeps the registry compatible with Git PR review, existing approval systems
 
 ### Drift
 
-Published entries are pinned. If the upstream git ref moves, the registry reports drift but does not silently replace the published snapshot.
+Published entries are pinned. If the upstream source changes, the registry reports drift but does not silently replace the published snapshot.
 
 ```text
-published snapshot commit != latest tracked ref
--> driftStatus = drifted
+git source:        published commit != latest tracked ref      -> drifted
+direct_url source: published content digest != latest content  -> drifted
+                   (HTTP sources use a conditional GET via ETag / Last-Modified
+                    and report `clean` on a 304 Not Modified)
+unreachable source: drift cannot be determined                 -> unknown
 -> maintainer decides whether to re-import and publish again
 ```
+
+`drift --ci` exits non-zero when anything is drifted; `build --exclude-drifted`
+(or `excludeDriftedFromCatalog: true` in `registry.yaml`) keeps drifted entries
+out of the exported catalog.
 
 ## Quick Start
 
@@ -247,15 +261,64 @@ Generated output:
 ```text
 agentcaps-registry init
 agentcaps-registry import [slug|--all]
-agentcaps-registry validate [slug|--all]
+agentcaps-registry validate [slug|--all] [--check-urls] [--timeout <ms>] [--json] [--min-score <n>]
 agentcaps-registry publish [slug|--all]
 agentcaps-registry revoke <slug>
-agentcaps-registry drift [slug|--all]
-agentcaps-registry build
+agentcaps-registry drift [slug|--all] [--json] [--ci]
+agentcaps-registry build [--exclude-drifted] [--json]
 agentcaps-registry search "<query>"
+agentcaps-registry serve [dir] [--port <n>] [--host <host>]
 ```
 
+### CI-friendly output
+
+Most commands take `--json` for machine-readable output. `validate` exits with a
+non-zero code when any entry has an `error`-level finding, or — with
+`--min-score <n>` — when any entry scores below the threshold, so it can gate a
+pipeline:
+
+```bash
+agentcaps-registry validate --all --json --min-score 70
+agentcaps-registry drift --all --ci   # non-zero exit if anything drifted
+agentcaps-registry build --exclude-drifted --json
+```
+
+`validate --check-urls` adds an optional network reachability check for each
+`CatalogEntry.url`. The result is recorded as an `url-reachability` finding and
+does not change the deterministic completeness score, so offline and CI runs stay
+stable by default.
+
 The CLI is published as the `agentcaps-registry` binary by the `@agentcaps/registry` npm package.
+
+## HTTP Endpoint
+
+`serve` exposes the built static artifacts over a minimal ARD-compatible HTTP
+surface. It reads `dist/ai-catalog.json` and `dist/search-index.json` once at
+startup, so run `build` first and restart to pick up changes.
+
+```bash
+agentcaps-registry --root .agentcaps serve
+# or point directly at a dist directory
+agentcaps-registry serve .agentcaps/dist --port 8787
+```
+
+Routes:
+
+```text
+GET  /.well-known/ai-catalog.json   the AICatalog manifest
+POST /search                        body: {"query": "...", "limit": 10}
+GET  /health                        liveness and published entry count
+```
+
+All responses include permissive CORS headers for public read-only use. This is a
+lightweight adapter over static artifacts, not a long-running registry server.
+
+```bash
+curl http://127.0.0.1:8787/.well-known/ai-catalog.json
+curl -X POST http://127.0.0.1:8787/search \
+  -H 'content-type: application/json' \
+  -d '{"query": "convert pptx to web slides", "limit": 5}'
+```
 
 ## Generated `ai-catalog.json`
 
@@ -327,13 +390,19 @@ A public website such as `agentcaps.dev` can be built on top of it by maintainin
 
 ## Roadmap
 
+Done:
+
+- stronger CatalogEntry validation rules (capability label format, tag dedupe/normalization, representative-query quality, optional URL reachability);
+- ARD-compatible HTTP endpoint adapter (`serve`: `/.well-known/ai-catalog.json` and `POST /search`);
+- end-to-end CLI workflow smoke test in CI;
+- CI-friendly command output (`--json`, `validate` exit codes / `--min-score`, `drift --ci`, `build --exclude-drifted`);
+- richer source adapters (direct_url drift via content digest + ETag / Last-Modified; brace / `**/` collection globs; `exclude` globs; default directory ignores).
+
 Near-term:
 
-- stronger CatalogEntry validation rules;
-- CI-friendly command output;
 - static web deployment examples;
-- ARD-compatible HTTP search endpoint adapter;
-- richer source adapters and drift notifications.
+- drift notifications and webhook integrations;
+- additional capability source types (MCP / A2A / OpenAPI).
 
 Later:
 

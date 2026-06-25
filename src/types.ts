@@ -27,6 +27,7 @@ export interface SourceDefinition {
   url: string;
   path?: string;
   include?: string[];
+  exclude?: string[];
   trackingRef?: string;
   curation?: {
     category?: string;
@@ -51,6 +52,8 @@ export interface SourceSnapshot {
   pinnedArtifactUrl: string;
   rawArtifactUrl: string;
   sourceDigest: string;
+  etag?: string;
+  lastModified?: string;
   fetchedAt: string;
 }
 
@@ -162,7 +165,12 @@ export interface DriftReport {
   slug: string;
   status: DriftStatus;
   checkedAt: string;
+  sourceType?: SourceType;
   previousCommit?: string;
   latestCommit?: string;
+  previousDigest?: string;
+  latestDigest?: string;
+  etag?: string;
+  lastModified?: string;
   message: string;
 }

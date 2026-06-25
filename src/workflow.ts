@@ -1,9 +1,9 @@
 import { join } from 'node:path';
 import type { AICatalogManifest, DriftReport, PublicationRecord, RegistryConfig, RegistryEntryFile, DriftStatus, SourceDefinition, SourceSnapshot } from './types.js';
 import { buildCatalogEntry } from './catalog.js';
-import { fetchSourceEntries, latestGitCommit } from './source.js';
+import { fetchSourceEntries, latestDirectUrlState, latestGitCommit } from './source.js';
 import { parseSkillMarkdown } from './skill.js';
-import { validateCatalogEntry } from './validation.js';
+import { validateCatalogEntry, validateCatalogEntryWithReachability } from './validation.js';
 import {
   ensureRegistryDirs,
   findSource,
@@ -99,9 +99,16 @@ export async function importAll(root: string): Promise<RegistryEntryFile[]> {
   return results;
 }
 
-export async function validateEntry(slug: string, root: string) {
+export interface ValidateEntryOptions {
+  checkUrls?: boolean;
+  timeoutMs?: number;
+}
+
+export async function validateEntry(slug: string, root: string, options: ValidateEntryOptions = {}) {
   const catalogEntry = await readEntryCatalog(root, slug);
-  const validation = validateCatalogEntry(catalogEntry);
+  const validation = options.checkUrls
+    ? await validateCatalogEntryWithReachability(catalogEntry, { timeoutMs: options.timeoutMs })
+    : validateCatalogEntry(catalogEntry);
   await writeJsonFile(join(root, 'entries', slug, 'validation.json'), validation);
   return validation;
 }
@@ -131,16 +138,21 @@ export async function revokeEntry(slug: string, root: string): Promise<RegistryE
   return updated;
 }
 
-export async function buildRegistry(root: string): Promise<AICatalogManifest> {
+export interface BuildOptions {
+  excludeDrifted?: boolean;
+}
+
+export async function buildRegistry(root: string, options: BuildOptions = {}): Promise<AICatalogManifest> {
   await ensureRegistryDirs(root);
   const config = await loadRegistryConfig(root);
+  const excludeDrifted = options.excludeDrifted ?? config.excludeDriftedFromCatalog ?? false;
   const slugs = await listEntrySlugs(root);
   const entries = [];
   const docs = [];
   for (const slug of slugs) {
     const listing = await readListing(root, slug);
     if (listing.publicationStatus !== 'published') continue;
-    if (config.excludeDriftedFromCatalog && listing.driftStatus === 'drifted') continue;
+    if (excludeDrifted && listing.driftStatus === 'drifted') continue;
     entries.push(listing.catalogEntry);
     docs.push(documentFromEntry(slug, listing.catalogEntry, { url: listing.source.url, path: listing.source.path }));
     await writeJsonFile(join(root, 'dist', 'listings', `${slug}.json`), listing);
@@ -168,31 +180,73 @@ export async function searchBuiltIndex(root: string, query: string, limit?: numb
 export async function checkDrift(slug: string, root: string): Promise<DriftReport> {
   const entry = await readEntry(root, slug);
   const checkedAt = new Date().toISOString();
-  if (entry.source.type !== 'git_repository') {
-    const updated = { ...entry, driftStatus: 'unsupported' as const };
+
+  async function persist(status: DriftStatus): Promise<void> {
+    const updated = { ...entry, driftStatus: status };
     const [catalogEntry, validation] = await Promise.all([readEntryCatalog(root, slug), readEntryValidation(root, slug)]);
     await writeEntryBundle(root, updated, catalogEntry, validation);
-    const report: DriftReport = { slug, status: 'unsupported', checkedAt, message: 'Drift detection is unsupported for direct_url sources in V0.' };
+  }
+
+  async function finalize(report: DriftReport): Promise<DriftReport> {
+    await persist(report.status);
     await writeDriftReport(root, slug, report);
     return report;
   }
-  const latestCommit = await latestGitCommit(entry.source);
-  const previousCommit = entry.snapshot.sourceCommit;
-  const drifted = Boolean(previousCommit && latestCommit !== previousCommit);
-  const status: DriftStatus = drifted ? 'drifted' : 'clean';
-  const updated = { ...entry, driftStatus: status };
-  const [catalogEntry, validation] = await Promise.all([readEntryCatalog(root, slug), readEntryValidation(root, slug)]);
-  await writeEntryBundle(root, updated, catalogEntry, validation);
-  const report: DriftReport = {
+
+  if (entry.source.type === 'git_repository') {
+    const latestCommit = await latestGitCommit(entry.source);
+    const previousCommit = entry.snapshot.sourceCommit;
+    const drifted = Boolean(previousCommit && latestCommit !== previousCommit);
+    const status: DriftStatus = drifted ? 'drifted' : 'clean';
+    return finalize({
+      slug,
+      status,
+      checkedAt,
+      sourceType: 'git_repository',
+      previousCommit,
+      latestCommit,
+      message: drifted ? 'Source ref changed; re-import and publish explicitly to update.' : 'Published snapshot matches tracked source ref.'
+    });
+  }
+
+  if (entry.source.type === 'direct_url') {
+    const previousDigest = entry.snapshot.sourceDigest;
+    const state = await latestDirectUrlState(entry.source, {
+      etag: entry.snapshot.etag,
+      lastModified: entry.snapshot.lastModified
+    });
+    let status: DriftStatus;
+    let message: string;
+    if (!state.available) {
+      status = 'unknown';
+      message = 'Direct URL source is currently unreachable; drift could not be determined.';
+    } else if (state.notModified) {
+      status = 'clean';
+      message = 'Source not modified (validated via ETag / Last-Modified).';
+    } else if (state.digest) {
+      const drifted = state.digest !== previousDigest;
+      status = drifted ? 'drifted' : 'clean';
+      message = drifted
+        ? 'Source content changed; re-import and publish explicitly to update.'
+        : 'Source content digest matches the published snapshot.';
+    } else {
+      status = 'unknown';
+      message = 'Could not read direct URL source content for drift comparison.';
+    }
+    const report: DriftReport = { slug, status, checkedAt, sourceType: 'direct_url', previousDigest, message };
+    if (state.digest) report.latestDigest = state.digest;
+    if (state.etag) report.etag = state.etag;
+    if (state.lastModified) report.lastModified = state.lastModified;
+    return finalize(report);
+  }
+
+  return finalize({
     slug,
-    status,
+    status: 'unsupported',
     checkedAt,
-    previousCommit,
-    latestCommit,
-    message: drifted ? 'Source ref changed; re-import and publish explicitly to update.' : 'Published snapshot matches tracked source ref.'
-  };
-  await writeDriftReport(root, slug, report);
-  return report;
+    sourceType: entry.source.type,
+    message: `Drift detection is unsupported for ${entry.source.type} sources.`
+  });
 }
 
 export async function checkAllDrift(root: string): Promise<DriftReport[]> {
